@@ -3,12 +3,12 @@
 // 설정 방법은 README.md 참고. placeholder 상태이면 앱은 자동으로 localStorage(로컬 전용)로 동작합니다.
 
 export const firebaseConfig = {
-  apiKey: 'YOUR_API_KEY',
-  authDomain: 'YOUR_PROJECT.firebaseapp.com',
-  projectId: 'YOUR_PROJECT_ID',
-  storageBucket: 'YOUR_PROJECT.appspot.com',
-  messagingSenderId: 'YOUR_SENDER_ID',
-  appId: 'YOUR_APP_ID',
+  apiKey: 'AIzaSyBw_v3W7TPx7KovRqxwQkKEeKuOAkd_qwo',
+  authDomain: 'scl-cultureday.firebaseapp.com',
+  projectId: 'scl-cultureday',
+  storageBucket: 'scl-cultureday.firebasestorage.app',
+  messagingSenderId: '127413337986',
+  appId: '1:127413337986:web:31fdf9b26f40877e4ed99b',
 };
 
 export const isConfigured = !firebaseConfig.apiKey.startsWith('YOUR_');
