@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>컬처데이 월별 배정</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- 좌측: 히스토리 스택 -->
+    <aside class="sidebar">
+      <h2 class="sidebar-title">배정 기록</h2>
+      <button id="new-btn" class="new-btn">＋ 새 배정</button>
+      <ul id="history-list" class="history-list"></ul>
+      <div id="backend-badge" class="backend-badge"></div>
+    </aside>
+
+    <!-- 우측: 메인 -->
+    <main class="main">
+      <!-- 새 배정 화면 -->
+      <section id="compose-view">
+        <h1>컬처데이 월별 배정</h1>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h3>팀 멤버 (<span id="member-count">0</span>명)</h3>
+            <span id="save-state" class="save-state"></span>
+          </div>
+          <div class="member-input-row">
+            <input id="member-input" type="text" placeholder="이름 입력 후 Enter (쉼표로 여러 명)" />
+            <button id="add-btn">추가</button>
+          </div>
+          <ul id="member-list" class="member-list"></ul>
+        </div>
+
+        <div class="panel controls">
+          <label>연도
+            <input id="year-input" type="number" min="2000" max="2100" />
+          </label>
+          <div class="half-toggle">
+            <button class="half-btn active" data-half="first">상반기 (1~6월)</button>
+            <button class="half-btn" data-half="second">하반기 (7~12월)</button>
+          </div>
+          <div id="dist-preview" class="dist-preview"></div>
+          <button id="start-btn" class="start-btn">시작 ▶</button>
+        </div>
+
+        <div class="panel ladder-panel">
+          <canvas id="ladder-canvas" width="900" height="520"></canvas>
+        </div>
+
+        <div id="result-panel" class="panel result-panel hidden">
+          <h3 id="result-title"></h3>
+          <div id="result-grid" class="result-grid"></div>
+        </div>
+      </section>
+
+      <!-- 히스토리 조회 화면 -->
+      <section id="history-view" class="hidden">
+        <div class="history-head">
+          <h1 id="hv-title"></h1>
+          <div>
+            <button id="hv-replay" class="replay-btn">선별과정 재현 ▶</button>
+            <button id="hv-delete" class="delete-btn">삭제</button>
+          </div>
+        </div>
+        <div class="panel ladder-panel">
+          <canvas id="hv-canvas" width="900" height="520"></canvas>
+        </div>
+        <div class="panel result-panel">
+          <div id="hv-grid" class="result-grid"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="js/ladder.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
