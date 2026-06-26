@@ -12,6 +12,38 @@ const TOKEN_COLORS = [
   '#ffd8b1', '#fffac8', '#808080', '#ff4500', '#2e8b57', '#1e90ff',
 ];
 
+// 암호학적 난수원 (신뢰성). 브라우저/Node 모두 webcrypto 사용, 없으면 Math.random 폴백.
+function rand() {
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const u = new Uint32Array(1);
+    crypto.getRandomValues(u);
+    return u[0] / 0x100000000;
+  }
+  return Math.random();
+}
+
+// 균등한 [0, max) 정수 (rejection sampling으로 modulo 편향 제거)
+function randInt(max) {
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const u = new Uint32Array(1);
+    const limit = Math.floor(0x100000000 / max) * max;
+    let x;
+    do { crypto.getRandomValues(u); x = u[0]; } while (x >= limit);
+    return x % max;
+  }
+  return Math.floor(Math.random() * max);
+}
+
+// Fisher–Yates 균등 셔플 (원본 불변, 새 배열 반환)
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = randInt(i + 1);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 // N명을 6개월에 분배: 앞쪽 (N%6)개 달은 base+1명, 나머지는 base명
 function computeMonthCounts(n) {
   const months = 6;
@@ -36,14 +68,14 @@ function buildSlotMonths(monthCounts, half) {
 
 // amidakuji 가로줄 무작위 생성. rungs: [{row, col}] (col은 col↔col+1 레인을 잇는 가로줄)
 // 같은 행에서 인접 가로줄이 겹치지 않도록 보장.
-function generateRungs(laneCount, rowsPerLane = 3) {
-  const rows = Math.max(8, laneCount * rowsPerLane);
+function generateRungs(laneCount, rowsPerLane = 4) {
+  const rows = Math.max(12, laneCount * rowsPerLane);
   const rungs = [];
   for (let row = 0; row < rows; row++) {
     let col = 0;
     while (col < laneCount - 1) {
       // 인접 겹침 방지: 가로줄을 놓으면 다음 칸은 건너뛴다
-      if (Math.random() < 0.4) {
+      if (rand() < 0.52) {
         rungs.push({ row, col });
         col += 2;
       } else {
@@ -70,7 +102,8 @@ function traverse(laneIndex, rungs, rows) {
 function computeAssignment(names, half) {
   const n = names.length;
   const monthCounts = computeMonthCounts(n);
-  const slotMonths = buildSlotMonths(monthCounts, half);
+  // 하단 월 슬롯을 균등 셔플 → 사다리가 국소적이어도 최종 배정은 균등(uniform) 보장.
+  const slotMonths = shuffle(buildSlotMonths(monthCounts, half));
   const { rungs, rows } = generateRungs(n);
 
   const result = {}; // name -> month
@@ -116,6 +149,26 @@ function rowY(canvas, rows, row) {
   return PADDING.top + (usable * row) / rows;
 }
 
+// 교차(rung) 모양 스타일을 (row, leftCol)에서 결정적으로 파생 → 저장 없이 리플레이 동일.
+// 0: DIAGONAL(대각선), 1: SCURVE(S자), 2: ARC(반원/곡선 bump)
+function rungStyle(row, leftCol) {
+  return (((row * 73856093) ^ (leftCol * 19349663)) >>> 0) % 3;
+}
+
+// 교차 구간의 x좌표: 시작 xA(상단) → 도착 xB(하단), 진행도 frac(0~1)을 스타일별 곡선으로.
+function crossX(xA, xB, style, frac) {
+  if (style === 1) { // S자 (smoothstep)
+    const e = frac * frac * (3 - 2 * frac);
+    return xA + (xB - xA) * e;
+  }
+  if (style === 2) { // 반원/곡선 bump (진행 방향으로 부풀어 lens 형태)
+    const dir = Math.sign(xB - xA) || 1;
+    const amp = Math.abs(xB - xA) * 0.55;
+    return xA + (xB - xA) * frac + Math.sin(Math.PI * frac) * amp * dir;
+  }
+  return xA + (xB - xA) * frac; // 대각선
+}
+
 function drawBoard(ctx, canvas, data) {
   const { names, slotMonths, rungs, rows } = data;
   const n = names.length;
@@ -132,14 +185,27 @@ function drawBoard(ctx, canvas, data) {
     ctx.stroke();
   }
 
-  // 가로줄
+  // 교차(rung): 밴드[row, row+1] 전체를 스타일별 곡선으로. 두 가닥(좌→우, 우→좌)을
+  // 그려 X/렌즈처럼 엮인 모양을 만든다. 토큰은 같은 곡선 위를 지난다(정직성).
+  const STEPS = 14;
   ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 2;
   rungs.forEach(({ row, col }) => {
-    const y = rowY(canvas, rows, row + 0.5);
-    ctx.beginPath();
-    ctx.moveTo(laneX(canvas, n, col), y);
-    ctx.lineTo(laneX(canvas, n, col + 1), y);
-    ctx.stroke();
+    const yT = rowY(canvas, rows, row);
+    const yB = rowY(canvas, rows, row + 1);
+    const xL = laneX(canvas, n, col);
+    const xR = laneX(canvas, n, col + 1);
+    const style = rungStyle(row, col);
+    [[xL, xR], [xR, xL]].forEach(([xa, xb]) => {
+      ctx.beginPath();
+      for (let s = 0; s <= STEPS; s++) {
+        const f = s / STEPS;
+        const x = crossX(xa, xb, style, f);
+        const y = yT + (yB - yT) * f;
+        if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    });
   });
 
   // 상단 이름 라벨
@@ -159,15 +225,23 @@ function drawBoard(ctx, canvas, data) {
   }
 }
 
-// 토큰 위치 보간: path(행별 col)을 따라 진행도 t(0~rows)에 해당하는 {x,y}
+// 토큰 위치 보간: path(행별 col)을 따라 진행도 t(0~rows)에 해당하는 {x,y}.
+// 교차 세그먼트에서는 해당 rung 스타일의 곡선을 그대로 따라간다(연결선 위 정직 이동).
 function tokenPos(canvas, n, rows, path, t) {
   const seg = Math.min(Math.floor(t), rows);
   const frac = t - seg;
   const colA = path[seg];
   const colB = path[Math.min(seg + 1, rows)];
-  const col = colA + (colB - colA) * frac;
-  const x = laneX(canvas, n, col);
-  const y = rowY(canvas, rows, seg + frac);
+  const yT = rowY(canvas, rows, seg);
+  const yB = rowY(canvas, rows, Math.min(seg + 1, rows));
+  const y = yT + (yB - yT) * frac;
+  let x;
+  if (colA === colB) {
+    x = laneX(canvas, n, colA);
+  } else {
+    const style = rungStyle(seg, Math.min(colA, colB));
+    x = crossX(laneX(canvas, n, colA), laneX(canvas, n, colB), style, frac);
+  }
   return { x, y };
 }
 
