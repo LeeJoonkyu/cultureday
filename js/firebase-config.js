@@ -12,3 +12,8 @@ export const firebaseConfig = {
 };
 
 export const isConfigured = !firebaseConfig.apiKey.startsWith('YOUR_');
+
+// 최초 관리자(부트스트랩) 참고값. 실제 관리자 목록의 단일 출처는 Firestore의
+// config/admins 문서(emails 배열)입니다. 콘솔에서 이 이메일로 1회 시드한 뒤로는
+// 앱의 "관리자 관리" UI에서 추가/제거하세요. (이 상수는 안내/문서용)
+export const OWNER_EMAIL = 'ljk6463@gmail.com';

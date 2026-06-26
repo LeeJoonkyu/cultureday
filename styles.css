@@ -42,8 +42,38 @@ body {
 .history-item:hover { background: #475569; }
 .hi-label { font-weight: 600; font-size: 14px; }
 .hi-meta { font-size: 12px; color: #94a3b8; margin-top: 2px; }
-.backend-badge { font-size: 11px; color: #94a3b8; margin-top: 12px; text-align: center; }
+.sidebar-foot { margin-top: 12px; border-top: 1px solid #334155; padding-top: 12px; }
+.auth-btn {
+  width: 100%; background: #334155; color: #e2e8f0; border: 1px solid #475569;
+  border-radius: 8px; padding: 9px; font-size: 13px; cursor: pointer; font-weight: 600;
+}
+.auth-btn:hover { background: #475569; }
+.auth-btn.in { background: #16a34a; border-color: #16a34a; color: #fff; }
+.auth-state { font-size: 11px; color: #94a3b8; margin-top: 6px; text-align: center; word-break: break-all; }
+.backend-badge { font-size: 11px; color: #94a3b8; margin-top: 8px; text-align: center; }
 .backend-badge.local { color: #fbbf24; }
+
+/* 멤버 저장 / 관리자 패널 */
+.member-foot { margin-top: 12px; }
+.save-members-btn, #admin-add-btn {
+  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  padding: 9px 16px; font-weight: 600; cursor: pointer;
+}
+.save-members-btn:disabled, .confirm-btn:disabled {
+  background: #cbd5e1; color: #fff; cursor: not-allowed;
+}
+.save-members-btn.dirty { background: #f59e0b; }
+.admin-panel h3 { font-size: 16px; margin-bottom: 12px; }
+.admin-list { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.admin-list li {
+  display: flex; align-items: center; gap: 6px;
+  background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 999px; padding: 5px 6px 5px 12px; font-size: 14px;
+}
+.admin-list .admin-del {
+  background: #bbf7d0; border: none; border-radius: 50%; width: 20px; height: 20px;
+  cursor: pointer; line-height: 1; font-size: 14px;
+}
+.admin-list .admin-del:hover { background: #fca5a5; }
 
 /* ── 메인 ── */
 .main { flex: 1; padding: 28px 36px; max-width: 1000px; }
@@ -92,6 +122,11 @@ body {
 }
 .start-btn:hover { background: #15803d; }
 .start-btn:disabled { background: #94a3b8; cursor: default; }
+.confirm-btn {
+  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  padding: 11px 22px; font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.confirm-btn:hover:not(:disabled) { background: var(--accent-dark); }
 
 /* 사다리 */
 .ladder-panel { display: flex; justify-content: center; }
