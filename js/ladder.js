@@ -68,14 +68,15 @@ function buildSlotMonths(monthCounts, half) {
 
 // amidakuji 가로줄 무작위 생성. rungs: [{row, col}] (col은 col↔col+1 레인을 잇는 가로줄)
 // 같은 행에서 인접 가로줄이 겹치지 않도록 보장.
-function generateRungs(laneCount, rowsPerLane = 4) {
-  const rows = Math.max(12, laneCount * rowsPerLane);
+function generateRungs(laneCount) {
+  // 가독성 우선: 한산한 밀도. (무작위성은 하단 슬롯 셔플이 보장하므로 밀도와 무관)
+  const rows = Math.max(8, Math.round(laneCount * 1.6));
   const rungs = [];
   for (let row = 0; row < rows; row++) {
     let col = 0;
     while (col < laneCount - 1) {
       // 인접 겹침 방지: 가로줄을 놓으면 다음 칸은 건너뛴다
-      if (rand() < 0.52) {
+      if (rand() < 0.3) {
         rungs.push({ row, col });
         col += 2;
       } else {
@@ -149,24 +150,48 @@ function rowY(canvas, rows, row) {
   return PADDING.top + (usable * row) / rows;
 }
 
-// 교차(rung) 모양 스타일을 (row, leftCol)에서 결정적으로 파생 → 저장 없이 리플레이 동일.
-// 0: DIAGONAL(대각선), 1: SCURVE(S자), 2: ARC(반원/곡선 bump)
-function rungStyle(row, leftCol) {
-  return (((row * 73856093) ^ (leftCol * 19349663)) >>> 0) % 3;
+const STRAIGHT = 0; // 고전 가로줄 (down → 수평 → down, L자)
+const DIAGONAL = 1; // 밴드 전체 대각선
+
+function laneGap(canvas, n) {
+  return n > 1 ? laneX(canvas, n, 1) - laneX(canvas, n, 0) : 0;
 }
 
-// 교차 구간의 x좌표: 시작 xA(상단) → 도착 xB(하단), 진행도 frac(0~1)을 스타일별 곡선으로.
-function crossX(xA, xB, style, frac) {
-  if (style === 1) { // S자 (smoothstep)
-    const e = frac * frac * (3 - 2 * frac);
-    return xA + (xB - xA) * e;
+// 교차(rung) 모양을 (row, leftCol)에서 결정적으로 파생 → 저장 없이 리플레이 동일.
+// 가로줄 다수(60%) / 대각선(40%).
+function rungStyle(row, leftCol) {
+  const h = ((row * 73856093) ^ (leftCol * 19349663)) >>> 0;
+  return (h % 5) < 3 ? STRAIGHT : DIAGONAL;
+}
+
+// 단일 세로줄 hop(작은 반원). 교차 없는 세로 구간에서 가끔(~8%) 살짝 튀었다 복귀.
+// 같은 열로 돌아오므로 배정에 영향 없음. 양끝 레인은 안쪽으로만 bump.
+function hopAt(row, col, n) {
+  const h = ((row * 2654435761) ^ (col * 40503)) >>> 0;
+  let dir = (h & 8) ? 1 : -1;
+  if (col === 0) dir = 1; else if (col === n - 1) dir = -1;
+  return { hop: h % 13 === 0, dir };
+}
+
+// 세그먼트 한 칸(seg→seg+1)에서 진행도 frac(0~1)의 토큰/선 좌표. drawBoard와 tokenPos 공용.
+function pathPoint(canvas, n, rows, colA, colB, seg, frac) {
+  const yT = rowY(canvas, rows, seg);
+  const yB = rowY(canvas, rows, Math.min(seg + 1, rows));
+  const xa = laneX(canvas, n, colA);
+  if (colA === colB) { // 세로 (+ 가끔 hop 반원)
+    const { hop, dir } = hopAt(seg, colA, n);
+    const x = hop ? xa + Math.sin(Math.PI * frac) * laneGap(canvas, n) * 0.22 * dir : xa;
+    return { x, y: yT + (yB - yT) * frac };
   }
-  if (style === 2) { // 반원/곡선 bump (진행 방향으로 부풀어 lens 형태)
-    const dir = Math.sign(xB - xA) || 1;
-    const amp = Math.abs(xB - xA) * 0.55;
-    return xA + (xB - xA) * frac + Math.sin(Math.PI * frac) * amp * dir;
+  const xb = laneX(canvas, n, colB);
+  if (rungStyle(seg, Math.min(colA, colB)) === DIAGONAL) {
+    return { x: xa + (xb - xa) * frac, y: yT + (yB - yT) * frac };
   }
-  return xA + (xB - xA) * frac; // 대각선
+  // STRAIGHT (L자): down → 수평 → down
+  const yMid = (yT + yB) / 2;
+  if (frac < 0.38) return { x: xa, y: yT + (yMid - yT) * (frac / 0.38) };
+  if (frac < 0.62) return { x: xa + (xb - xa) * ((frac - 0.38) / 0.24), y: yMid };
+  return { x: xb, y: yMid + (yB - yMid) * ((frac - 0.62) / 0.38) };
 }
 
 function drawBoard(ctx, canvas, data) {
@@ -185,9 +210,7 @@ function drawBoard(ctx, canvas, data) {
     ctx.stroke();
   }
 
-  // 교차(rung): 밴드[row, row+1] 전체를 스타일별 곡선으로. 두 가닥(좌→우, 우→좌)을
-  // 그려 X/렌즈처럼 엮인 모양을 만든다. 토큰은 같은 곡선 위를 지난다(정직성).
-  const STEPS = 14;
+  // 교차(rung): STRAIGHT는 수평 가로줄, DIAGONAL은 X자(두 대각선). 토큰은 같은 선 위로 지남.
   ctx.strokeStyle = '#94a3b8';
   ctx.lineWidth = 2;
   rungs.forEach(({ row, col }) => {
@@ -195,18 +218,37 @@ function drawBoard(ctx, canvas, data) {
     const yB = rowY(canvas, rows, row + 1);
     const xL = laneX(canvas, n, col);
     const xR = laneX(canvas, n, col + 1);
-    const style = rungStyle(row, col);
-    [[xL, xR], [xR, xL]].forEach(([xa, xb]) => {
+    if (rungStyle(row, col) === STRAIGHT) {
+      const yMid = (yT + yB) / 2;
+      ctx.beginPath();
+      ctx.moveTo(xL, yMid);
+      ctx.lineTo(xR, yMid);
+      ctx.stroke();
+    } else { // DIAGONAL → X
+      ctx.beginPath();
+      ctx.moveTo(xL, yT); ctx.lineTo(xR, yB);
+      ctx.moveTo(xR, yT); ctx.lineTo(xL, yB);
+      ctx.stroke();
+    }
+  });
+
+  // 단일 세로줄 hop(작은 반원): 교차가 닿지 않는 세로 칸에 가끔.
+  const touched = new Set();
+  rungs.forEach(({ row, col }) => { touched.add(`${row}:${col}`); touched.add(`${row}:${col + 1}`); });
+  const STEPS = 12;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < n; col++) {
+      if (touched.has(`${row}:${col}`)) continue;
+      if (!hopAt(row, col, n).hop) continue;
       ctx.beginPath();
       for (let s = 0; s <= STEPS; s++) {
         const f = s / STEPS;
-        const x = crossX(xa, xb, style, f);
-        const y = yT + (yB - yT) * f;
+        const { x, y } = pathPoint(canvas, n, rows, col, col, row, f);
         if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
       }
       ctx.stroke();
-    });
-  });
+    }
+  }
 
   // 상단 이름 라벨
   ctx.font = 'bold 13px sans-serif';
@@ -232,17 +274,7 @@ function tokenPos(canvas, n, rows, path, t) {
   const frac = t - seg;
   const colA = path[seg];
   const colB = path[Math.min(seg + 1, rows)];
-  const yT = rowY(canvas, rows, seg);
-  const yB = rowY(canvas, rows, Math.min(seg + 1, rows));
-  const y = yT + (yB - yT) * frac;
-  let x;
-  if (colA === colB) {
-    x = laneX(canvas, n, colA);
-  } else {
-    const style = rungStyle(seg, Math.min(colA, colB));
-    x = crossX(laneX(canvas, n, colA), laneX(canvas, n, colB), style, frac);
-  }
-  return { x, y };
+  return pathPoint(canvas, n, rows, colA, colB, seg, frac);
 }
 
 // 애니메이션 재생. data로부터 모든 토큰을 동시에 내려보낸다. 완료 시 onDone 호출.
